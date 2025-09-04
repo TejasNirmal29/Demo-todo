@@ -18,26 +18,45 @@ mongoose
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ DB connection error:", err));
 
-// Routes
-app.get("/api/todos", async (req, res) => {
-  const todos = await Todo.find().sort({ createdAt: -1 });
-  res.json(todos);
-});
-
 app.post("/api/todos", async (req, res) => {
-  const { title, description } = req.body;
-  const todo = new Todo({ title, description });
+  const { title, description, dueDate } = req.body;
+  const now = new Date();
+
+  if (!dueDate || new Date(dueDate) <= now) {
+    return res.status(400).json({ message: "Due date must be in the future" });
+  }
+
+  const todo = new Todo({ title, description, dueDate });
   await todo.save();
   res.json(todo);
 });
 
+app.get("/api/todos", async (req, res) => {
+  const now = new Date();
+
+  // Auto-update overdue tasks
+  await Todo.updateMany(
+    { dueDate: { $lt: now }, status: "pending" },
+    { status: "rejected" }
+  );
+
+  const todos = await Todo.find().sort({ createdAt: -1 });
+  res.json(todos);
+});
+
 app.put("/api/todos/:id", async (req, res) => {
-  const { title, description } = req.body;
+  const { title, description, dueDate, status } = req.body;
+
+  if (dueDate && new Date(dueDate) <= new Date()) {
+    return res.status(400).json({ message: "Due date must be in the future" });
+  }
+
   const todo = await Todo.findByIdAndUpdate(
     req.params.id,
-    { title, description },
+    { title, description, dueDate, status },
     { new: true }
   );
+
   res.json(todo);
 });
 
